@@ -482,7 +482,7 @@ static int mmc_mailbox_probe(struct i2c_client* client)
     return 0;
 }
 
-static int mmc_mailbox_remove(struct i2c_client* client)
+static void mmc_mailbox_remove(struct i2c_client* client)
 {
     pm_runtime_disable(&client->dev);
     pm_runtime_set_suspended(&client->dev);
@@ -490,8 +490,6 @@ static int mmc_mailbox_remove(struct i2c_client* client)
     if (pm_power_off == &mmc_mailbox_do_poweroff) {
         pm_power_off = NULL;
     }
-
-    return 0;
 }
 
 static struct i2c_driver mmc_mailbox_driver = {
