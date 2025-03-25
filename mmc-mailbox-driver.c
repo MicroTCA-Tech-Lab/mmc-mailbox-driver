@@ -498,7 +498,7 @@ static struct i2c_driver mmc_mailbox_driver = {
             .name = "mmc_mailbox",
             .of_match_table = mmc_mailbox_of_match,
         },
-    .probe_new = mmc_mailbox_probe,
+    .probe = mmc_mailbox_probe,
     .remove = mmc_mailbox_remove,
     .id_table = mmc_mailbox_ids,
 };
