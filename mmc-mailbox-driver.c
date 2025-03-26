@@ -3,6 +3,7 @@
  * "Virtual EEPROM" driver for DMMC-STAMP Mailbox
  *
  * Copyright (C) 2022 Patrick Huesmann, DESY
+ * Copyright (C) 2025 Atom Computing, Inc.
  *
  * Based on at24.c by David Brownell & Wolfram Sang
  *
@@ -20,6 +21,7 @@
 #include <linux/property.h>
 #include <linux/regmap.h>
 #include <linux/slab.h>
+#include <linux/version.h>
 
 #include <linux/mod_devicetable.h>
 #include <linux/nvmem-provider.h>
@@ -482,7 +484,13 @@ static int mmc_mailbox_probe(struct i2c_client* client)
     return 0;
 }
 
-static int mmc_mailbox_remove(struct i2c_client* client)
+static
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
+int
+#else
+void
+#endif
+mmc_mailbox_remove(struct i2c_client* client)
 {
     pm_runtime_disable(&client->dev);
     pm_runtime_set_suspended(&client->dev);
@@ -491,7 +499,9 @@ static int mmc_mailbox_remove(struct i2c_client* client)
         pm_power_off = NULL;
     }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
     return 0;
+#endif
 }
 
 static struct i2c_driver mmc_mailbox_driver = {
@@ -500,7 +510,11 @@ static struct i2c_driver mmc_mailbox_driver = {
             .name = "mmc_mailbox",
             .of_match_table = mmc_mailbox_of_match,
         },
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
     .probe_new = mmc_mailbox_probe,
+#else
+    .probe = mmc_mailbox_probe,
+#endif
     .remove = mmc_mailbox_remove,
     .id_table = mmc_mailbox_ids,
 };
