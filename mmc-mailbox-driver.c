@@ -413,12 +413,16 @@ static int mmc_mailbox_probe(struct i2c_client* client)
     regmap_config.val_bits = 8;
     regmap_config.reg_bits = 16;
     regmap_config.disable_locking = true;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
+    regmap_config.cache_type = REGCACHE_NONE;
+    regmap_config.max_register = byte_len - 1;
+#endif
 
     regmap = devm_regmap_init_i2c(client, &regmap_config);
     if (IS_ERR(regmap))
         return PTR_ERR(regmap);
 
-    mmc_mailbox = devm_kzalloc(dev, sizeof(mmc_mailbox), GFP_KERNEL);
+    mmc_mailbox = devm_kzalloc(dev, sizeof(*mmc_mailbox), GFP_KERNEL);
     if (!mmc_mailbox)
         return -ENOMEM;
 
@@ -432,6 +436,10 @@ static int mmc_mailbox_probe(struct i2c_client* client)
     if (!i2c_fn_i2c && mmc_mailbox->write_max > I2C_SMBUS_BLOCK_MAX)
         mmc_mailbox->write_max = I2C_SMBUS_BLOCK_MAX;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+    nvmem_config.type = NVMEM_TYPE_EEPROM;
+    nvmem_config.id = NVMEM_DEVID_AUTO;
+#endif
     nvmem_config.name = dev_name(dev);
     nvmem_config.dev = dev;
     nvmem_config.read_only = false;
@@ -446,26 +454,38 @@ static int mmc_mailbox_probe(struct i2c_client* client)
     nvmem_config.word_size = 1;
     nvmem_config.size = byte_len;
 
-    mmc_mailbox->nvmem = devm_nvmem_register(dev, &nvmem_config);
-    if (IS_ERR(mmc_mailbox->nvmem))
-        return PTR_ERR(mmc_mailbox->nvmem);
-
     i2c_set_clientdata(client, mmc_mailbox);
 
     /* enable runtime pm */
     pm_runtime_set_active(dev);
     pm_runtime_enable(dev);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+    /* Use newer error handling for v6.6+ */
+    mmc_mailbox->nvmem = devm_nvmem_register(dev, &nvmem_config);
+    if (IS_ERR(mmc_mailbox->nvmem)) {
+        err = PTR_ERR(mmc_mailbox->nvmem);
+        pm_runtime_disable(dev);
+        return dev_err_probe(dev, err, "failed to register nvmem\n");
+    }
+#else
+    /* Original nvmem registration for older kernels */
+    mmc_mailbox->nvmem = devm_nvmem_register(dev, &nvmem_config);
+    if (IS_ERR(mmc_mailbox->nvmem))
+        pm_runtime_disable(dev);
+        return PTR_ERR(mmc_mailbox->nvmem);
+#endif
+
     /*
    * Perform a one-byte test read to verify that the
    * chip is functional.
    */
     err = at24_read(mmc_mailbox, 0, &test_byte, 1);
-    pm_runtime_idle(dev);
     if (err) {
         pm_runtime_disable(dev);
         return -ENODEV;
     }
+    pm_runtime_idle(dev);
 
     dev_info(dev,
              "%u byte %s EEPROM, %u bytes/write\n",
